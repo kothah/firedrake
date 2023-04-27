@@ -3,6 +3,7 @@ import itertools
 import numpy
 import os
 import ufl
+from ufl.domain import extract_unique_domain
 from itertools import chain
 from pyop2.mpi import COMM_WORLD, internal_comm, decref
 from pyop2.utils import as_tuple
@@ -53,6 +54,8 @@ cells = {
     (ufl_wedge, True): VTK_LAGRANGE_WEDGE,
     (ufl_hex, False): VTK_HEXAHEDRON,
     (ufl_hex, True): VTK_LAGRANGE_HEXAHEDRON,
+    (ufl.Cell("hexahedron"), False): VTK_HEXAHEDRON,
+    (ufl.Cell("hexahedron"), True): VTK_LAGRANGE_HEXAHEDRON,
 }
 
 
@@ -370,7 +373,7 @@ class File(object):
         :kwarg mode: "w" to overwrite any existing file, "a" to append to an existing file.
         :kwarg target_degree: override the degree of the output space.
         :kwarg target_continuity: override the continuity of the output space;
-            A UFL :class:`~.SobolevSpace` object: `H1` for a
+            A UFL :class:`ufl.sobolevspace.SobolevSpace` object: `H1` for a
             continuous output and `L2` for a discontinuous output.
         :kwarg adaptive: allow different meshes at different exports if `True`.
 
@@ -460,16 +463,16 @@ class File(object):
         # Build appropriate space for output function.
         shape = function.ufl_shape
         if len(shape) == 0:
-            V = FunctionSpace(function.ufl_domain(), max_elem)
+            V = FunctionSpace(extract_unique_domain(function), max_elem)
         elif len(shape) == 1:
             if numpy.prod(shape) > 3:
                 raise ValueError("Can't write vectors with more than 3 components")
-            V = VectorFunctionSpace(function.ufl_domain(), max_elem,
+            V = VectorFunctionSpace(extract_unique_domain(function), max_elem,
                                     dim=shape[0])
         elif len(shape) == 2:
             if numpy.prod(shape) > 9:
                 raise ValueError("Can't write tensors with more than 9 components")
-            V = TensorFunctionSpace(function.ufl_domain(), max_elem,
+            V = TensorFunctionSpace(extract_unique_domain(function), max_elem,
                                     shape=shape)
         else:
             raise ValueError("Unsupported shape %s" % (shape, ))
@@ -494,7 +497,7 @@ class File(object):
         for f in functions:
             if not isinstance(f, Function):
                 raise ValueError("Can only output Functions or a single mesh, not %r" % type(f))
-        meshes = tuple(f.ufl_domain() for f in functions)
+        meshes = tuple(extract_unique_domain(f) for f in functions)
         if not all(m == meshes[0] for m in meshes):
             raise ValueError("All functions must be on same mesh")
 

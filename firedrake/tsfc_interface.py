@@ -181,7 +181,7 @@ def compile_form(form, name, parameters=None, split=True, interface=None, coffee
     :arg coffee: compile coffee kernel instead of loopy kernel
 
     Returns a tuple of tuples of
-    (index, integral type, subdomain id, coordinates, coefficients, needs_orientations, :class:`Kernels <pyop2.op2.Kernel>`).
+    (index, integral type, subdomain id, coordinates, coefficients, needs_orientations, ``pyop2.op2.Kernel``).
 
     ``needs_orientations`` indicates whether the form requires cell
     orientation information (for correctly pulling back to reference
@@ -226,6 +226,11 @@ def compile_form(form, name, parameters=None, split=True, interface=None, coffee
         iterable = ([(None, )*nargs, form], )
     for idx, f in iterable:
         f = _real_mangle(f)
+        if not f.integrals():
+            # If we're assembling the R space component of a mixed argument,
+            # and that component doesn't actually appear in the form then we
+            # have an empty form, which we should not attempt to assemble.
+            continue
         # Map local coefficient numbers (as seen inside the
         # compiler) to the global coefficient numbers
         number_map = tuple(coefficient_numbers[c] for c in f.coefficients())
@@ -290,7 +295,7 @@ def gather_integer_subdomain_ids(knls):
 
 
 def as_pyop2_local_kernel(ast, name, nargs, access=op2.INC, **kwargs):
-    """Convert a loopy kernel to a PyOP2 :class:`pyop2.LocalKernel`.
+    """Convert a loopy kernel to a PyOP2 ``pyop2.LocalKernel``.
 
     :arg ast: The kernel code. This could be, for example, a loopy kernel.
     :arg name: The kernel name.
@@ -315,7 +320,7 @@ def extract_numbered_coefficients(expr, numbers):
     coefficients = []
     for coeff in (orig_coefficients[i] for i in numbers):
         if type(coeff.ufl_element()) == ufl.MixedElement:
-            coefficients.extend(coeff.split())
+            coefficients.extend(coeff.subfunctions)
         else:
             coefficients.append(coeff)
     return coefficients

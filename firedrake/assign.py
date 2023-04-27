@@ -10,6 +10,7 @@ from ufl.algorithms import extract_coefficients
 from ufl.constantvalue import as_ufl
 from ufl.corealg.map_dag import map_expr_dag
 from ufl.corealg.multifunction import MultiFunction
+from ufl.domain import extract_unique_domain
 
 from firedrake.constant import Constant
 from firedrake.function import Function
@@ -109,7 +110,7 @@ class CoefficientCollector(MultiFunction):
         is going to be used as a scale factor (e.g. ``u.assign(Constant(2)*v)``), or as a
         constant to be added (e.g. ``u.assign(2*v + Constant(3))``). Therefore we only
         compress to a scalar when we know it is required (e.g. inside a product with a
-        :class:`firedrake.Function`).
+        :class:`~.firedrake.function.Function`).
         """
         return pytools.one(
             functools.reduce(operator.add, (c.dat.data_ro*w for c, w in weighted_coefficients))
@@ -117,11 +118,11 @@ class CoefficientCollector(MultiFunction):
 
 
 class Assigner:
-    """Class performing pointwise assignment of an expression to a :class:`firedrake.Function`.
+    """Class performing pointwise assignment of an expression to a :class:`firedrake.function.Function`.
 
-    :param assignee: The :class:`firedrake.Function` being assigned to.
-    :param expression: The :class:`ufl.Expr` to evaluate.
-    :param subset: Optional subset (:class:`op2.Subset`) to apply the assignment over.
+    :param assignee: The :class:`~.firedrake.function.Function` being assigned to.
+    :param expression: The :class:`ufl.core.expr.Expr` to evaluate.
+    :param subset: Optional subset (:class:`pyop2.types.set.Subset`) to apply the assignment over.
     """
     symbol = "="
 
@@ -137,7 +138,7 @@ class Assigner:
                 if coeff.ufl_element() != assignee.ufl_element():
                     raise ValueError("All functions in the expression must have the same "
                                      "element as the assignee")
-                if coeff.ufl_domain() != assignee.ufl_domain():
+                if extract_unique_domain(coeff) != extract_unique_domain(assignee):
                     raise ValueError("All functions in the expression must use the same "
                                      "mesh as the assignee")
 
@@ -219,7 +220,7 @@ class Assigner:
 
 
 class IAddAssigner(Assigner):
-    """Assigner class for :func:`firedrake.Function.__iadd__`."""
+    """Assigner class for ``firedrake.function.Function.__iadd__``."""
     symbol = "+="
 
     def _assign_single_dat(self, assignee_dat, function_dats):
@@ -227,7 +228,7 @@ class IAddAssigner(Assigner):
 
 
 class ISubAssigner(Assigner):
-    """Assigner class for :func:`firedrake.Function.__isub__`."""
+    """Assigner class for ``firedrake.function.Function.__isub__``."""
     symbol = "-="
 
     def _assign_single_dat(self, assignee_dat, function_dats):
@@ -235,7 +236,7 @@ class ISubAssigner(Assigner):
 
 
 class IMulAssigner(Assigner):
-    """Assigner class for :func:`firedrake.Function.__imul__`."""
+    """Assigner class for ``firedrake.function.Function.__imul__``."""
     symbol = "*="
 
     def _assign_single_dat(self, assignee_dat, function_dats):
@@ -245,7 +246,7 @@ class IMulAssigner(Assigner):
 
 
 class IDivAssigner(Assigner):
-    """Assigner class for :func:`firedrake.Function.__itruediv__`."""
+    """Assigner class for ``firedrake.function.Function.__itruediv__``."""
     symbol = "/="
 
     def _assign_single_dat(self, assignee_dat, function_dats):

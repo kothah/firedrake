@@ -6,6 +6,7 @@ from coffee import base as ast
 from ufl import MixedElement, TensorProductCell
 from ufl.corealg.map_dag import map_expr_dags
 from ufl.algorithms import extract_arguments, extract_coefficients
+from ufl.domain import extract_unique_domain
 
 import gem
 
@@ -49,8 +50,8 @@ def compile_element(expression, coordinates, parameters=None):
         raise NotImplementedError("Cannot point evaluate mixed elements yet!")
 
     # Replace coordinates (if any)
-    domain = expression.ufl_domain()
-    assert coordinates.ufl_domain() == domain
+    domain = extract_unique_domain(expression)
+    assert extract_unique_domain(coordinates) == domain
 
     # Initialise kernel builder
     builder = firedrake_interface.KernelBuilderBase(utils.ScalarType_c)
@@ -70,12 +71,12 @@ def compile_element(expression, coordinates, parameters=None):
     point_arg = ast.Decl(utils.ScalarType_c, ast.Symbol('X', rank=(dim,)))
 
     config = dict(interface=builder,
-                  ufl_cell=coordinates.ufl_domain().ufl_cell(),
+                  ufl_cell=extract_unique_domain(coordinates).ufl_cell(),
                   point_indices=(),
                   point_expr=point,
                   scalar_type=utils.ScalarType)
     # TODO: restore this for expression evaluation!
-    # config["cellvolume"] = cellvolume_generator(coordinates.ufl_domain(), coordinates, config)
+    # config["cellvolume"] = cellvolume_generator(extract_unique_domain(coordinates), coordinates, config)
     context = tsfc.fem.GemPointContext(**config)
 
     # Abs-simplification
@@ -136,8 +137,10 @@ static inline void wrap_evaluate(%(scalar_type)s* const result, %(scalar_type)s*
 
 int evaluate(struct Function *f, double *x, %(scalar_type)s *result)
 {
-    struct ReferenceCoords reference_coords;
-    %(IntType)s cell = locate_cell(f, x, %(geometric_dimension)d, &to_reference_coords, &to_reference_coords_xtr, &reference_coords);
+    /* The type definitions and arguments used here are defined as statics in pointquery_utils.py */
+    double found_ref_cell_dist_l1 = DBL_MAX;
+    struct ReferenceCoords temp_reference_coords, found_reference_coords;
+    %(IntType)s cell = locate_cell(f, x, %(geometric_dimension)d, &to_reference_coords, &to_reference_coords_xtr, &temp_reference_coords, &found_reference_coords, &found_ref_cell_dist_l1);
     if (cell == -1) {
         return -1;
     }
@@ -152,7 +155,7 @@ int evaluate(struct Function *f, double *x, %(scalar_type)s *result)
     cell = cell / nlayers;
 #endif
 
-    wrap_evaluate(result, reference_coords.X, cell, cell+1%(layers)s, f->coords, f->f, %(map_args)s);
+    wrap_evaluate(result, found_reference_coords.X, cell, cell+1%(layers)s, f->coords, f->f, %(map_args)s);
     return 0;
 }
 """

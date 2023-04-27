@@ -10,6 +10,7 @@ from firedrake.mg import utils
 from ufl.algorithms.analysis import extract_arguments, extract_coefficients
 from ufl.algorithms import estimate_total_polynomial_degree
 from ufl.corealg.map_dag import map_expr_dags
+from ufl.domain import extract_unique_domain
 
 import coffee.base as ast
 
@@ -28,7 +29,7 @@ from tsfc.kernel_interface.common import lower_integral_type
 from tsfc.parameters import default_parameters
 from tsfc.finatinterface import create_element
 from finat.quadrature import make_quadrature
-from firedrake.pointquery_utils import dX_norm_square, X_isub_dX, init_X, inside_check, is_affine, compute_celldist
+from firedrake.pointquery_utils import dX_norm_square, X_isub_dX, init_X, inside_check, is_affine, celldist_l1_c_expr
 from firedrake.pointquery_utils import to_reference_coords_newton_step as to_reference_coords_newton_step_body
 
 
@@ -129,7 +130,7 @@ def compile_element(expression, dual_space=None, parameters=None,
 
     # Replace coordinates (if any)
     builder = firedrake_interface.KernelBuilderBase(scalar_type=ScalarType_c)
-    domain = expression.ufl_domain()
+    domain = extract_unique_domain(expression)
     # Translate to GEM
     cell = domain.ufl_cell()
     dim = cell.topological_dimension()
@@ -202,11 +203,11 @@ def compile_element(expression, dual_space=None, parameters=None,
 
 
 def prolong_kernel(expression):
-    meshc = expression.ufl_domain()
-    hierarchy, level = utils.get_level(expression.ufl_domain())
+    meshc = extract_unique_domain(expression)
+    hierarchy, level = utils.get_level(extract_unique_domain(expression))
     levelf = level + Fraction(1 / hierarchy.refinements_per_level)
     cache = hierarchy._shared_data_cache["transfer_kernels"]
-    coordinates = expression.ufl_domain().coordinates
+    coordinates = extract_unique_domain(expression).coordinates
     if meshc.cell_set._extruded:
         idx = levelf * hierarchy.refinements_per_level
         assert idx == int(idx)
@@ -220,7 +221,7 @@ def prolong_kernel(expression):
     try:
         return cache[key]
     except KeyError:
-        mesh = coordinates.ufl_domain()
+        mesh = extract_unique_domain(coordinates)
         evaluate_kernel = compile_element(expression)
         to_reference_kernel = to_reference_coordinates(coordinates.ufl_element())
         element = create_element(expression.ufl_element())
@@ -248,7 +249,7 @@ def prolong_kernel(expression):
                     break;
                 }
 
-                %(compute_celldist)s
+                celldist = %(celldist_l1_c_expr)s;
                 if (celldist < bestdist) {
                     bestdist = celldist;
                     bestcell = i;
@@ -285,7 +286,7 @@ def prolong_kernel(expression):
                "ncandidate": hierarchy.fine_to_coarse_cells[levelf].shape[1] * level_ratio,
                "Rdim": numpy.prod(element.value_shape),
                "inside_cell": inside_check(element.cell, eps=1e-8, X="Xref"),
-               "compute_celldist": compute_celldist(element.cell, X="Xref", celldist="celldist"),
+               "celldist_l1_c_expr": celldist_l1_c_expr(element.cell, X="Xref"),
                "Xc_cell_inc": coords_element.space_dimension(),
                "coarse_cell_inc": element.space_dimension(),
                "tdim": mesh.topological_dimension()}
@@ -311,7 +312,7 @@ def restrict_kernel(Vf, Vc):
     try:
         return cache[key]
     except KeyError:
-        mesh = coordinates.ufl_domain()
+        mesh = extract_unique_domain(coordinates)
         evaluate_kernel = compile_element(firedrake.TestFunction(Vc), Vf)
         to_reference_kernel = to_reference_coordinates(coordinates.ufl_element())
         coords_element = create_element(coordinates.ufl_element())
@@ -339,7 +340,7 @@ def restrict_kernel(Vf, Vc):
                     break;
                 }
 
-                %(compute_celldist)s
+                celldist = %(celldist_l1_c_expr)s;
                 /* fprintf(stderr, "cell %%d celldist: %%.14e\\n", i, celldist);
                 fprintf(stderr, "Xref: %%.14e %%.14e %%.14e\\n", Xref[0], Xref[1], Xref[2]); */
                 if (celldist < bestdist) {
@@ -372,7 +373,7 @@ def restrict_kernel(Vf, Vc):
                "evaluate": str(evaluate_kernel),
                "ncandidate": hierarchy.fine_to_coarse_cells[levelf].shape[1]*level_ratio,
                "inside_cell": inside_check(element.cell, eps=1e-8, X="Xref"),
-               "compute_celldist": compute_celldist(element.cell, X="Xref", celldist="celldist"),
+               "celldist_l1_c_expr": celldist_l1_c_expr(element.cell, X="Xref"),
                "Xc_cell_inc": coords_element.space_dimension(),
                "coarse_cell_inc": element.space_dimension(),
                "args": args,
@@ -431,7 +432,7 @@ def inject_kernel(Vf, Vc):
                     break;
                 }
 
-                %(compute_celldist)s
+                celldist = %(celldist_l1_c_expr)s;
                 if (celldist < bestdist) {
                     bestdist = celldist;
                     bestcell = i;
@@ -463,7 +464,7 @@ def inject_kernel(Vf, Vc):
             "evaluate": str(evaluate_kernel),
             "inside_cell": inside_check(Vc.finat_element.cell, eps=1e-8, X="Xref"),
             "spacedim": Vc.finat_element.cell.get_spatial_dimension(),
-            "compute_celldist": compute_celldist(Vc.finat_element.cell, X="Xref", celldist="celldist"),
+            "celldist_l1_c_expr": celldist_l1_c_expr(Vc.finat_element.cell, X="Xref"),
             "tdim": Vc.ufl_domain().topological_dimension(),
             "ncandidate": ncandidate,
             "Rdim": numpy.prod(Vf_element.value_shape),
@@ -498,7 +499,7 @@ class MacroKernelBuilder(firedrake_interface.KernelBuilderBase):
     def set_coordinates(self, domain):
         """Prepare the coordinate field.
 
-        :arg domain: :class:`ufl.Domain`
+        :arg domain: :class:`ufl.AbstractDomain`
         """
         # Create a fake coordinate coefficient for a domain.
         f = ufl.Coefficient(ufl.FunctionSpace(domain, domain.ufl_coordinate_element()))
@@ -544,7 +545,7 @@ def dg_injection_kernel(Vf, Vc, ncell):
     fexpr, = fem.compile_ufl(f, macro_context)
     X = ufl.SpatialCoordinate(Vf.mesh())
     C_a, = fem.compile_ufl(X, macro_context)
-    detJ = ufl_utils.preprocess_expression(abs(ufl.JacobianDeterminant(f.ufl_domain())),
+    detJ = ufl_utils.preprocess_expression(abs(ufl.JacobianDeterminant(extract_unique_domain(f))),
                                            complex_mode=complex_mode)
     macro_detJ, = fem.compile_ufl(detJ, macro_context)
 

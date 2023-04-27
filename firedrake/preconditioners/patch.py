@@ -14,6 +14,7 @@ from itertools import chain
 from functools import partial
 import numpy
 from ufl import VectorElement, MixedElement
+from ufl.domain import extract_unique_domain
 from tsfc.kernel_interface.firedrake_loopy import make_builder
 import weakref
 
@@ -205,7 +206,7 @@ def matrix_funptr(form, state):
                 args.append(statearg)
                 continue
             for ind in indices:
-                c_ = c.split()[ind]
+                c_ = c.subfunctions[ind]
                 map_ = get_map(c_)
                 arg = c_.dat(op2.READ, map_)
                 args.append(arg)
@@ -295,13 +296,13 @@ def residual_funptr(form, state):
                 args.append(statearg)
                 continue
             for ind in indices:
-                c_ = c.split()[ind]
+                c_ = c.subfunctions[ind]
                 map_ = get_map(c_)
                 arg = c_.dat(op2.READ, map_)
                 args.append(arg)
 
         if kinfo.integral_type == "interior_facet":
-            arg = test.ufl_domain().interior_facets.local_facet_dat(op2.READ)
+            arg = extract_unique_domain(test).interior_facets.local_facet_dat(op2.READ)
             args.append(arg)
         iterset = op2.Subset(iterset, [])
 
@@ -516,7 +517,7 @@ def make_c_arguments(form, kernel, state, get_map, require_state=False,
                 raise ValueError(f"Active indices of state (dont_split) function must be (0, ), not {indices}")
             coeffs.append(c)
         else:
-            coeffs.extend([c.split()[ind] for ind in indices])
+            coeffs.extend([c.subfunctions[ind] for ind in indices])
     if require_state:
         assert state in coeffs, "Couldn't find state vector in form coefficients"
     data_args = []
@@ -855,7 +856,7 @@ class PatchBase(PCSNESBase):
                                                                            require_facet_number=True)
                 code, Struct = make_jacobian_wrapper(facet_Fop_data_args, facet_Fop_map_args)
                 facet_Fop_function = load_c_function(code, "ComputeResidual", obj.comm)
-                point2facet = F.ufl_domain().interior_facets.point2facetnumber.ctypes.data
+                point2facet = extract_unique_domain(F).interior_facets.point2facetnumber.ctypes.data
                 facet_Fop_struct = make_c_struct(facet_Fop_data_args, facet_Fop_map_args,
                                                  Fint_facet_kernel.funptr, Struct,
                                                  point2facet=point2facet)
