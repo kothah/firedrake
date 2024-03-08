@@ -1,5 +1,6 @@
 import abc
 import ufl
+import finat.ufl
 from ufl.domain import extract_unique_domain
 
 import firedrake
@@ -132,7 +133,7 @@ class ProjectorBase(object, metaclass=abc.ABCMeta):
         u = firedrake.TrialFunction(self.target.function_space())
         v = firedrake.TestFunction(self.target.function_space())
         F = self.target.function_space()
-        mixed = isinstance(F.ufl_element(), ufl.MixedElement)
+        mixed = isinstance(F.ufl_element(), finat.ufl.MixedElement)
         if not mixed and isinstance(F.finat_element, HDivTrace):
             if F.extruded:
                 a = (firedrake.inner(u, v)*firedrake.ds_t
@@ -195,7 +196,7 @@ class BasicProjector(ProjectorBase):
     def rhs_form(self):
         v = firedrake.TestFunction(self.target.function_space())
         F = self.target.function_space()
-        mixed = isinstance(F.ufl_element(), ufl.MixedElement)
+        mixed = isinstance(F.ufl_element(), finat.ufl.MixedElement)
         if not mixed and isinstance(F.finat_element, HDivTrace):
             # Project onto a trace space by supplying the respective form on the facets.
             # The measures on the facets differ between extruded and non-extruded mesh.
@@ -217,13 +218,13 @@ class BasicProjector(ProjectorBase):
 
     @cached_property
     def assembler(self):
-        from firedrake.assemble import OneFormAssembler
-        return OneFormAssembler(self.rhs_form, tensor=self.residual,
-                                form_compiler_parameters=self.form_compiler_parameters).assemble
+        from firedrake.assemble import get_assembler
+        return get_assembler(self.rhs_form,
+                             form_compiler_parameters=self.form_compiler_parameters).assemble
 
     @property
     def rhs(self):
-        self.assembler()
+        self.assembler(tensor=self.residual)
         return self.residual
 
 

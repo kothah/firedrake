@@ -20,8 +20,8 @@ class AssembledPC(PCBase):
     _prefix = "assembled_"
 
     def initialize(self, pc):
-        from firedrake.assemble import allocate_matrix, TwoFormAssembler
-        _, P = pc.getOperators()
+        from firedrake.assemble import get_assembler
+        A, P = pc.getOperators()
 
         if pc.getType() != "python":
             raise ValueError("Expecting PC type python")
@@ -51,13 +51,10 @@ class AssembledPC(PCBase):
 
         (a, bcs) = self.form(pc, test, trial)
 
-        self.P = allocate_matrix(a, bcs=bcs,
-                                 form_compiler_parameters=fcp,
-                                 mat_type=mat_type,
-                                 options_prefix=options_prefix)
-        self._assemble_P = TwoFormAssembler(a, tensor=self.P, bcs=bcs,
-                                            form_compiler_parameters=fcp).assemble
-        self._assemble_P()
+        form_assembler = get_assembler(a, bcs=bcs, form_compiler_parameters=fcp, mat_type=mat_type, options_prefix=options_prefix)
+        self.P = form_assembler.allocate()
+        self._assemble_P = form_assembler.assemble
+        self._assemble_P(tensor=self.P)
 
         # Transfer nullspace over
         Pmat = self.P.petscmat
@@ -81,13 +78,13 @@ class AssembledPC(PCBase):
 
         pc.setDM(dm)
         pc.setOptionsPrefix(options_prefix)
-        pc.setOperators(Pmat, Pmat)
+        pc.setOperators(A, Pmat)
         self.pc = pc
         with dmhooks.add_hooks(dm, self, appctx=self._ctx_ref, save=False):
             pc.setFromOptions()
 
     def update(self, pc):
-        self._assemble_P()
+        self._assemble_P(tensor=self.P)
 
     def form(self, pc, test, trial):
         _, P = pc.getOperators()

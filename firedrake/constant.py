@@ -1,11 +1,19 @@
 import numpy as np
 import ufl
+import finat.ufl
 
 from tsfc.ufl_utils import TSFCConstantMixin
 from pyop2 import op2
 from pyop2.exceptions import DataTypeError, DataValueError
 from firedrake.petsc import PETSc
 from firedrake.utils import ScalarType
+from ufl.classes import all_ufl_classes, ufl_classes, terminal_classes
+from ufl.core.ufl_type import UFLType
+from ufl.corealg.multifunction import MultiFunction
+from ufl.formatting.ufl2unicode import (
+    Expression2UnicodeHandler, UC, subscript_number, PrecedenceRules,
+    colorama,
+)
 from ufl.utils.counted import Counted
 
 
@@ -53,6 +61,8 @@ class Constant(ufl.constantvalue.ConstantValue, ConstantMixin, TSFCConstantMixin
        :class:`~ufl.form.Form` on its own you need to pass a
        :func:`~.Mesh` as the domain argument.
     """
+    _ufl_typecode_ = UFLType._ufl_num_typecodes_
+    _ufl_handler_name_ = "firedrake_constant"
 
     def __new__(cls, value, domain=None, name=None, count=None):
         if domain:
@@ -67,14 +77,18 @@ class Constant(ufl.constantvalue.ConstantValue, ConstantMixin, TSFCConstantMixin
 
             dat, rank, shape = _create_dat(op2.Global, value, domain._comm)
 
-            domain = ufl.as_domain(domain)
+            if not isinstance(domain, ufl.AbstractDomain):
+                cell = ufl.as_cell(domain)
+                coordinate_element = finat.ufl.VectorElement("Lagrange", cell, 1, gdim=cell.geometric_dimension)
+                domain = ufl.Mesh(coordinate_element)
+
             cell = domain.ufl_cell()
             if rank == 0:
-                element = ufl.FiniteElement("R", cell, 0)
+                element = finat.ufl.FiniteElement("R", cell, 0)
             elif rank == 1:
-                element = ufl.VectorElement("R", cell, 0, shape[0])
+                element = finat.ufl.VectorElement("R", cell, 0, shape[0])
             else:
-                element = ufl.TensorElement("R", cell, 0, shape=shape)
+                element = finat.ufl.TensorElement("R", cell, 0, shape=shape)
 
             R = FunctionSpace(domain, element, name="firedrake.Constant")
             return Function(R, val=dat).assign(value)
@@ -192,3 +206,36 @@ class Constant(ufl.constantvalue.ConstantValue, ConstantMixin, TSFCConstantMixin
 
     def __str__(self):
         return str(self.dat.data_ro)
+
+
+# Unicode handler for Firedrake constants
+def _unicode_format_firedrake_constant(self, o):
+    """Format a Firedrake constant."""
+    i = o.count()
+    var = "C"
+    if len(o.ufl_shape) == 1:
+        var += UC.combining_right_arrow_above
+    elif len(o.ufl_shape) > 1 and self.colorama_bold:
+        var = f"{colorama.Style.BRIGHT}{var}{colorama.Style.RESET_ALL}"
+    return f"{var}{subscript_number(i)}"
+
+
+# This monkey patches ufl2unicode support for Firedrake constants
+Expression2UnicodeHandler.firedrake_constant = _unicode_format_firedrake_constant
+
+# This is internally done in UFL by the ufl_type decorator, but we cannot
+# do the same here, because we want to use the class name Constant
+UFLType._ufl_num_typecodes_ += 1
+UFLType._ufl_all_classes_.append(Constant)
+UFLType._ufl_all_handler_names_.add('firedrake_constant')
+UFLType._ufl_obj_init_counts_.append(0)
+UFLType._ufl_obj_del_counts_.append(0)
+
+# And doing the above does not append to these magic UFL variables...
+all_ufl_classes.add(Constant)
+ufl_classes.add(Constant)
+terminal_classes.add(Constant)
+
+# These caches need rebuilding for the new type to be registered
+MultiFunction._handlers_cache = {}
+ufl.formatting.ufl2unicode._precrules = PrecedenceRules()

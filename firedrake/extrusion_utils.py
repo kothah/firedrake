@@ -50,7 +50,7 @@ def make_extruded_coords(extruded_topology, base_coords, ext_coords,
     coordinates on the extruded cell (to write to), the fixed layer
     height, and the current cell layer.
     """
-    _, vert_space = ext_coords.function_space().ufl_element().sub_elements()[0].sub_elements()
+    _, vert_space = ext_coords.function_space().ufl_element().sub_elements[0].sub_elements
     if kernel is None and not (vert_space.degree() == 1
                                and vert_space.family() in ['Lagrange',
                                                            'Discontinuous Lagrange']):
@@ -168,7 +168,10 @@ def make_extruded_coords(extruded_topology, base_coords, ext_coords,
         _dd = _get_arity_axis_inames('_d')
         domains.extend(_get_lp_domains(dd, ext_shape[:adim]))
         domains.extend(_get_lp_domains(_dd, ext_shape[:adim]))
-        domains.extend(_get_lp_domains(('c0', 'c1', 'c2', 'c3', 'k', 'l'), (base_coord_dim, ) * 5 + (2, )))
+        if tdim == 1:
+            domains.extend(_get_lp_domains(('c0', 'c1', 'c2', 'k', 'l'), (base_coord_dim, ) * 4 + (2, )))
+        else:
+            domains.extend(_get_lp_domains(('c0', 'c1', 'c2', 'c3', 'k', 'l'), (base_coord_dim, ) * 5 + (2, )))
         # Formula for normal, n
         n_1_1 = """
         n[0] = -bc[1, 1] + bc[0, 1]

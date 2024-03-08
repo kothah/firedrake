@@ -68,6 +68,8 @@ Colin J. Cotter...............<https://www.imperial.ac.uk/people/colin.cotter>
 
 Joshua Coutinho
 
+Daiane I. Dolci...............<https://www.imperial.ac.uk/people/d.dolci>
+
 Patrick E. Farrell............<https://pefarrell.org>
 
 Simon W. Funke................<http://www.simonfunke.com>
@@ -128,7 +130,7 @@ Eike H. Mueller
 
 Reuben W. Nixon-Hill..........<https://www.imperial.ac.uk/people/reuben.nixon-hill10>
 
-Alberto Paganini..............<https://www2.le.ac.uk/departments/mathematics/extranet/staff-material/staff-profiles/alberto-paganini>
+Alberto Paganini..............<https://le.ac.uk/people/alberto-paganini>
 
 Francis J. Poulin
 
@@ -147,6 +149,8 @@ Koki Sagiyama.................<https://www.imperial.ac.uk/people/k.sagiyama>
 Tomasz J. Salwa
 
 Kaho Sato
+
+Matthew Scroggs...............<https://mscroggs.co.uk>
 
 Ben Sepanski..................<https://bensepanski.github.io>
 

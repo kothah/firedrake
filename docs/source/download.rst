@@ -21,11 +21,14 @@ current directory. Run::
 
   python3 firedrake-install --help
 
-for a full list of install options.  In particular, you may
-wish to customise the set of options used to build PETSc.  To do so,
-set the environment variable ``PETSC_CONFIGURE_OPTIONS`` before
-running ``firedrake-install``.  You can see the set of options passed
-to PETSc by providing the flag ``--show-petsc-configure-options``.
+for a full list of install options.  In particular, you may wish to
+customise PETSc by adding packages (for instance ``--download-fftw``).
+To do so, set the environment variable ``PETSC_CONFIGURE_OPTIONS``
+before running ``firedrake-install``. However, some configuration
+options (for instance ``--LDFLAGS`` and ``--CFLAGS``) should not be set
+in ``PETSC_CONFIGURE_OPTIONS`` as they are set by the install script.
+You can see the set of options passed to PETSc by providing the flag
+``--show-petsc-configure-options``.
 
 You will need to activate the venv in each shell from which you
 use Firedrake::
@@ -110,10 +113,9 @@ have yet to create binary wheels for 3.11.x, but we have generated these
 for the major supported platforms.
 The installation script is tested on Ubuntu and MacOS X. On Ubuntu 22.04
 or later, the system installed Python 3 is supported and tested. On
-MacOS, due to current issues with homebrew_, `pyenv <https://github.com/pyenv/pyenv>`_
-is the recommended way to obtain a functional Python 3. More information on
-how to install and use pyenv can be found
-`here <https://github.com/firedrakeproject/firedrake/wiki/Installing-pyenv>`_.
+MacOS, the homebrew_ installed Python 3 is supported::
+
+  brew install python3
 
 Installation is likely to work well on other Linux platforms, although
 the script may stop to ask you to install some dependency packages.
